@@ -1,6 +1,11 @@
+require 'logger'
+require 'pathname'
+require 'fileutils'
 # -*- coding: utf-8 -*-
 class LatexToPdf
   def self.config
+    root_path = '.'
+
     @config||={
       :recipe => [
       #  {
@@ -13,14 +18,16 @@ class LatexToPdf
       :command => 'pdflatex',
       :arguments => ['-halt-on-error'],
       :default_arguments => ['-shell-escape', '-interaction=batchmode'],
-      :parse_runs => 1
+      :parse_runs => 1,
+      :root_path => root_path,
+      :logger => Logger.new(File.join(root_path, 'log', 'rails_latex.log'))
     }
   end
 
   # Converts a string of LaTeX +code+ into a binary string of PDF.
   #
   # By default, pdflatex is used to convert the file and creates the directory
-  # +#{Rails.root}/tmp/rails-latex/+ to store intermediate files.
+  # +#{root_path}/tmp/rails-latex/+ to store intermediate files.
   #
   # The config argument defaults to LatexToPdf.config but can be overridden
   # using @latex_config.
@@ -31,7 +38,7 @@ class LatexToPdf
     # Deprecated legacy mode, if no recipe found
     if recipe.length == 0
       if config != self.config
-        Rails.logger.warn("Using command, arguments and parse_runs is deprecated in favor of recipe")
+        config[:logger].warn("Using command, arguments and parse_runs is deprecated in favor of recipe")
       end
       # Regression fix -- ability to override some arguments (-halt-on-error) but not other (-interaction),
       #                   this is expected behaviour as seen in test_broken_doc_overriding_halt_on_error.
@@ -44,7 +51,7 @@ class LatexToPdf
     end
 
     # Create directory, prepare additional supporting files (.cls, .sty, ...)
-    dir = File.join(Rails.root, 'tmp', 'rails-latex', "#{Process.pid}-#{Thread.current.hash}")
+    dir = File.join(config[:root_path], 'tmp', 'rails-latex', "#{Process.pid}-#{Thread.current.hash}")
     input = File.join(dir, 'input.tex')
     FileUtils.mkdir_p(dir)
     supporting = config[:supporting]
@@ -60,7 +67,7 @@ class LatexToPdf
       args = item[:arguments] || config[:arguments] + config[:default_arguments]
       args += item[:extra_arguments].to_a + ['input']
       kwargs = {:out => ["input.log", "a"]}
-      Rails.logger.info "Running #{command} #{args.join(' ')} #{runs} times..."
+      config[:logger].info "Running #{command} #{args.join(' ')} #{runs} times..."
       Process.waitpid(
         fork do
           begin
